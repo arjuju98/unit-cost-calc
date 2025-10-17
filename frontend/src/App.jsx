@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DollarSign, ChefHat, Calculator, Loader2 } from 'lucide-react';
+import { DollarSign, ChefHat, Calculator, Loader2, Edit2, Check, X, Info } from 'lucide-react';
 
 export default function UnitCostCalculator() {
   const [recipe, setRecipe] = useState('');
@@ -7,6 +7,9 @@ export default function UnitCostCalculator() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editPrice, setEditPrice] = useState('');
+  const [expandedIndex, setExpandedIndex] = useState(null);
 
   const exampleRecipe = `Chocolate Chip Protein Cookies
 
@@ -31,9 +34,9 @@ Yields: 6 cookies`;
     setLoading(true);
     setError('');
     setResult(null);
+    setEditingIndex(null);
 
     try {
-      // Call backend API
       const response = await fetch('http://localhost:8000/calculate-cost', {
         method: 'POST',
         headers: {
@@ -56,6 +59,47 @@ Yields: 6 cookies`;
     } finally {
       setLoading(false);
     }
+  };
+
+  const startEdit = (index, currentCost) => {
+    setEditingIndex(index);
+    setEditPrice(currentCost.toFixed(2));
+  };
+
+  const cancelEdit = () => {
+    setEditingIndex(null);
+    setEditPrice('');
+  };
+
+  const saveEdit = (index) => {
+    const newCost = parseFloat(editPrice);
+    if (isNaN(newCost) || newCost < 0) {
+      alert('Please enter a valid price');
+      return;
+    }
+
+    // Update the ingredient cost
+    const updatedIngredients = [...result.ingredients];
+    updatedIngredients[index].cost = newCost;
+    updatedIngredients[index].manually_adjusted = true;
+
+    // Recalculate totals
+    const newTotalCost = updatedIngredients.reduce((sum, ing) => sum + ing.cost, 0);
+    const newUnitCost = newTotalCost / result.yield_count;
+
+    setResult({
+      ...result,
+      ingredients: updatedIngredients,
+      total_cost: newTotalCost,
+      unit_cost: newUnitCost
+    });
+
+    setEditingIndex(null);
+    setEditPrice('');
+  };
+
+  const toggleExpanded = (index) => {
+    setExpandedIndex(expandedIndex === index ? null : index);
   };
 
   const loadExample = () => {
@@ -174,6 +218,17 @@ Yields: 6 cookies`;
                   </div>
                 )}
 
+                {/* Instructions */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Tip: You can edit prices!</p>
+                      <p className="text-xs mt-1">Click the edit icon to adjust any ingredient cost based on your actual purchase price.</p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Ingredients Table */}
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <table className="w-full">
@@ -185,21 +240,103 @@ Yields: 6 cookies`;
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase">
                           Cost
                         </th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase w-20">
+                          Edit
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {result.ingredients?.map((ing, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-900">
-                            {ing.ingredient}
-                            <span className="text-gray-500 text-xs ml-2">
-                              ({ing.quantity}{ing.unit})
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
-                            ${ing.cost.toFixed(2)}
-                          </td>
-                        </tr>
+                        <React.Fragment key={idx}>
+                          <tr className="hover:bg-gray-50">
+                            <td className="px-4 py-3">
+                              <div className="text-sm text-gray-900 font-medium">
+                                {ing.ingredient}
+                                {ing.manually_adjusted && (
+                                  <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                                    Edited
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {ing.quantity}{ing.unit}
+                                {ing.package_info && (
+                                  <button
+                                    onClick={() => toggleExpanded(idx)}
+                                    className="ml-2 text-blue-600 hover:text-blue-700"
+                                  >
+                                    {expandedIndex === idx ? 'hide details' : 'show details'}
+                                  </button>
+                                )}
+                              </div>
+                              {ing.note && (
+                                <div className="text-xs text-orange-600 mt-1 flex items-start gap-1">
+                                  <span>⚠️</span>
+                                  <span>{ing.note}</span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {editingIndex === idx ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <span className="text-sm text-gray-500">$</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={editPrice}
+                                    onChange={(e) => setEditPrice(e.target.value)}
+                                    className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-orange-500 text-right"
+                                    autoFocus
+                                  />
+                                </div>
+                              ) : (
+                                <span className="text-sm text-gray-900 font-medium">
+                                  ${ing.cost.toFixed(2)}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {editingIndex === idx ? (
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => saveEdit(idx)}
+                                    className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                    title="Save"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={cancelEdit}
+                                    className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => startEdit(idx, ing.cost)}
+                                  className="p-1 text-gray-600 hover:bg-gray-100 rounded"
+                                  title="Edit price"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                          {expandedIndex === idx && ing.package_info && (
+                            <tr className="bg-gray-50">
+                              <td colSpan="3" className="px-4 py-3">
+                                <div className="text-xs text-gray-600 space-y-1">
+                                  <div className="font-medium text-gray-700">Pricing Details:</div>
+                                  <div>Package Size: {ing.package_info.size}</div>
+                                  <div>Package Price: ${ing.package_info.price.toFixed(2)}</div>
+                                  <div>Cost per {ing.package_info.unit}: ${ing.package_info.cost_per_unit.toFixed(4)}</div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
