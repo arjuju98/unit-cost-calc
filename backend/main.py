@@ -4,8 +4,7 @@ from pydantic import BaseModel
 import anthropic
 import os
 import json
-import requests
-from typing import List, Dict, Optional
+from typing import List, Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -22,9 +21,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# API Keys - you'll need to set these as environment variables
+# API Key
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-SPOONACULAR_API_KEY = os.getenv("SPOONACULAR_API_KEY")
 
 # Initialize Anthropic client
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -32,18 +30,6 @@ client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 class RecipeRequest(BaseModel):
     recipe: str
     yield_count: int = None
-
-    class Config:
-        # Allow both 'yield' and 'yield_count' as field names
-        populate_by_name = True
-        json_schema_extra = {
-            "examples": [
-                {
-                    "recipe": "Sample recipe text",
-                    "yield": 6
-                }
-            ]
-        }
 
 class PackageInfo(BaseModel):
     size: str
@@ -67,7 +53,7 @@ class CostResult(BaseModel):
     yield_count: int
     unit_cost: float
 
-def parse_recipe_with_claude(recipe_text: str) -> Dict:
+def parse_recipe_with_claude(recipe_text: str) -> dict:
     """Use Claude to extract structured ingredient data from recipe text."""
     
     prompt = f"""Extract and normalize ingredients from the following recipe.
@@ -112,137 +98,76 @@ Recipe:
     
     return json.loads(response_text)
 
-def get_ingredient_price(ingredient_name: str, quantity: float, unit: str) -> tuple[float, PackageInfo]:
+def get_ingredient_price(ingredient_name: str, quantity: float, unit: str) -> tuple[float, Optional[PackageInfo]]:
     """
-    Fetch ingredient pricing using Spoonacular API.
+    Get ingredient pricing from our curated database.
     Returns (cost for the specific quantity used, package info).
     """
     
-    if not SPOONACULAR_API_KEY:
-        # Fallback prices if no API key (for testing)
-        fallback_data = {
-            "oats": {"price_per_g": 0.002, "package_size": "1kg", "package_price": 2.00},
-            "peanut butter": {"price_per_g": 0.012, "package_size": "454g", "package_price": 5.49},
-            "protein powder": {"price_per_g": 0.022, "package_size": "810g (27 servings)", "package_price": 45.00},
-            "egg": {"price_per_item": 0.23, "package_size": "12 eggs", "package_price": 2.76},
-            "chocolate chips": {"price_per_g": 0.010, "package_size": "300g", "package_price": 3.00},
-            "flour": {"price_per_g": 0.001, "package_size": "2kg", "package_price": 2.00},
-            "butter": {"price_per_g": 0.015, "package_size": "454g", "package_price": 6.99},
-            "sugar": {"price_per_g": 0.002, "package_size": "2kg", "package_price": 4.00},
-            "brown sugar": {"price_per_g": 0.003, "package_size": "1kg", "package_price": 3.00},
-            "vanilla extract": {"price_per_ml": 0.50, "package_size": "60ml", "package_price": 30.00},
-            "baking soda": {"price_per_g": 0.01, "package_size": "454g", "package_price": 4.54},
-            "baking powder": {"price_per_g": 0.02, "package_size": "227g", "package_price": 4.54},
-            "salt": {"price_per_g": 0.001, "package_size": "750g", "package_price": 0.75},
-            "milk": {"price_per_ml": 0.001, "package_size": "1L", "package_price": 1.00},
-            "vegetable oil": {"price_per_ml": 0.005, "package_size": "750ml", "package_price": 3.75},
-            "honey": {"price_per_g": 0.010, "package_size": "500g", "package_price": 5.00},
-            "cocoa powder": {"price_per_g": 0.018, "package_size": "250g", "package_price": 4.50},
-            "nuts": {"price_per_g": 0.025, "package_size": "200g", "package_price": 5.00},
-            "cinnamon": {"price_per_g": 0.05, "package_size": "50g", "package_price": 2.50},
-        }
-        
-        # Find closest match in fallback prices
-        ingredient_data = None
-        for key, data in fallback_data.items():
-            if key in ingredient_name.lower():
-                ingredient_data = data
-                break
-        
-        if ingredient_data:
-            if unit == "item":
-                cost = ingredient_data.get("price_per_item", 0.23) * quantity
-                package_info = PackageInfo(
-                    size=ingredient_data["package_size"],
-                    price=ingredient_data["package_price"],
-                    cost_per_unit=ingredient_data.get("price_per_item", 0.23),
-                    unit="item"
-                )
-            else:  # assume grams or ml
-                price_key = "price_per_ml" if unit == "ml" else "price_per_g"
-                cost_per_unit = ingredient_data.get(price_key, 0.01)
-                cost = cost_per_unit * quantity
-                package_info = PackageInfo(
-                    size=ingredient_data["package_size"],
-                    price=ingredient_data["package_price"],
-                    cost_per_unit=cost_per_unit,
-                    unit=unit
-                )
-            return cost, package_info
-        
-        # Default fallback - more reasonable estimates
-        if unit == "item":
-            cost = 0.25 * quantity  # $0.25 per item (like an egg)
-        else:  # grams or ml
-            cost = 0.01 * quantity  # $0.01 per gram/ml
-        
-        package_info = PackageInfo(
-            size="Unknown",
-            price=10.00,
-            cost_per_unit=0.01 if unit != "item" else 0.25,
-            unit=unit
-        )
-        return cost, package_info
+    # Curated ingredient database with realistic pricing
+    ingredient_database = {
+        "oats": {"price_per_g": 0.002, "package_size": "1kg", "package_price": 2.00},
+        "peanut butter": {"price_per_g": 0.012, "package_size": "454g", "package_price": 5.49},
+        "protein powder": {"price_per_g": 0.022, "package_size": "810g (27 servings)", "package_price": 45.00},
+        "egg": {"price_per_item": 0.23, "package_size": "12 eggs", "package_price": 2.76},
+        "chocolate chips": {"price_per_g": 0.010, "package_size": "300g", "package_price": 3.00},
+        "chocolate": {"price_per_g": 0.010, "package_size": "300g", "package_price": 3.00},
+        "flour": {"price_per_g": 0.001, "package_size": "2kg", "package_price": 2.00},
+        "almond flour": {"price_per_g": 0.018, "package_size": "454g", "package_price": 8.00},
+        "butter": {"price_per_g": 0.015, "package_size": "454g", "package_price": 6.99},
+        "sugar": {"price_per_g": 0.002, "package_size": "2kg", "package_price": 4.00},
+        "brown sugar": {"price_per_g": 0.003, "package_size": "1kg", "package_price": 3.00},
+        "vanilla extract": {"price_per_ml": 0.50, "package_size": "60ml", "package_price": 30.00},
+        "vanilla": {"price_per_ml": 0.50, "package_size": "60ml", "package_price": 30.00},
+        "baking soda": {"price_per_g": 0.01, "package_size": "454g", "package_price": 4.54},
+        "baking powder": {"price_per_g": 0.02, "package_size": "227g", "package_price": 4.54},
+        "salt": {"price_per_g": 0.001, "package_size": "750g", "package_price": 0.75},
+        "milk": {"price_per_ml": 0.001, "package_size": "1L", "package_price": 1.00},
+        "vegetable oil": {"price_per_ml": 0.005, "package_size": "750ml", "package_price": 3.75},
+        "oil": {"price_per_ml": 0.005, "package_size": "750ml", "package_price": 3.75},
+        "honey": {"price_per_g": 0.010, "package_size": "500g", "package_price": 5.00},
+        "cocoa powder": {"price_per_g": 0.018, "package_size": "250g", "package_price": 4.50},
+        "cocoa": {"price_per_g": 0.018, "package_size": "250g", "package_price": 4.50},
+        "nuts": {"price_per_g": 0.025, "package_size": "200g", "package_price": 5.00},
+        "cinnamon": {"price_per_g": 0.05, "package_size": "50g", "package_price": 2.50},
+        "applesauce": {"price_per_g": 0.003, "package_size": "650g", "package_price": 2.00},
+    }
     
-    try:
-        # Spoonacular ingredient search
-        search_url = f"https://api.spoonacular.com/food/ingredients/search"
-        search_params = {
-            "apiKey": SPOONACULAR_API_KEY,
-            "query": ingredient_name,
-            "number": 1
-        }
-        
-        search_response = requests.get(search_url, params=search_params)
-        search_data = search_response.json()
-        
-        if not search_data.get("results"):
-            return 0.10 * quantity  # Default estimate
-        
-        ingredient_id = search_data["results"][0]["id"]
-        
-        # Get ingredient information including price
-        info_url = f"https://api.spoonacular.com/food/ingredients/{ingredient_id}/information"
-        info_params = {
-            "apiKey": SPOONACULAR_API_KEY,
-            "amount": quantity,
-            "unit": unit
-        }
-        
-        info_response = requests.get(info_url, params=info_params)
-        info_data = info_response.json()
-        
-        # Extract price estimate
-        if "estimatedCost" in info_data:
-            # Spoonacular returns cost in cents
-            cost = info_data["estimatedCost"]["value"] / 100
+    # Find match in database
+    ingredient_data = None
+    for key, data in ingredient_database.items():
+        if key in ingredient_name.lower():
+            ingredient_data = data
+            break
+    
+    if ingredient_data:
+        if unit == "item":
+            cost = ingredient_data.get("price_per_item", 0.23) * quantity
             package_info = PackageInfo(
-                size="Estimated",
-                price=cost,
-                cost_per_unit=cost / quantity if quantity > 0 else 0,
+                size=ingredient_data["package_size"],
+                price=ingredient_data["package_price"],
+                cost_per_unit=ingredient_data.get("price_per_item", 0.23),
+                unit="item"
+            )
+        else:  # assume grams or ml
+            price_key = "price_per_ml" if unit == "ml" else "price_per_g"
+            cost_per_unit = ingredient_data.get(price_key, 0.01)
+            cost = cost_per_unit * quantity
+            package_info = PackageInfo(
+                size=ingredient_data["package_size"],
+                price=ingredient_data["package_price"],
+                cost_per_unit=cost_per_unit,
                 unit=unit
             )
-            return cost, package_info
-        
-        default_cost = 0.01 * quantity if unit != "item" else 0.25 * quantity
-        package_info = PackageInfo(
-            size="Unknown",
-            price=10.00,
-            cost_per_unit=0.01 if unit != "item" else 0.25,
-            unit=unit
-        )
-        return default_cost, package_info
-        
-    except Exception as e:
-        print(f"Error fetching price for {ingredient_name}: {e}")
-        default_cost = 0.01 * quantity if unit != "item" else 0.25 * quantity
-        package_info = PackageInfo(
-            size="Unknown",
-            price=10.00,
-            cost_per_unit=0.01 if unit != "item" else 0.25,
-            unit=unit
-        )
-        return default_cost, package_info
+        return cost, package_info
+    
+    # Default for unknown ingredients - no package info
+    if unit == "item":
+        cost = 0.25 * quantity
+    else:
+        cost = 0.01 * quantity
+    
+    return cost, None
 
 @app.get("/")
 async def root():
@@ -253,13 +178,14 @@ async def calculate_cost(request: RecipeRequest):
     """
     Main endpoint to calculate recipe cost.
     1. Parse recipe with Claude
-    2. Fetch pricing for each ingredient
+    2. Get pricing for each ingredient from database
     3. Calculate total and unit cost
     """
     
     try:
         # Debug logging
         print(f"Received request: recipe length={len(request.recipe)}, yield_count={request.yield_count}")
+        
         # Step 1: Parse recipe
         parsed_data = parse_recipe_with_claude(request.recipe)
         

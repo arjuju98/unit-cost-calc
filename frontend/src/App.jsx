@@ -263,15 +263,15 @@ Yields: 6 cookies`;
                                 {ing.package_info && (
                                   <button
                                     onClick={() => toggleExpanded(idx)}
-                                    className="ml-2 text-blue-600 hover:text-blue-700"
+                                    className="ml-2 text-blue-600 hover:text-blue-700 underline"
                                   >
                                     {expandedIndex === idx ? 'hide details' : 'show details'}
                                   </button>
                                 )}
                               </div>
                               {ing.note && (
-                                <div className="text-xs text-orange-600 mt-1 flex items-start gap-1">
-                                  <span>⚠️</span>
+                                <div className="text-xs text-blue-600 mt-1.5 flex items-start gap-1 bg-blue-50 px-2 py-1 rounded">
+                                  <span>💡</span>
                                   <span>{ing.note}</span>
                                 </div>
                               )}
