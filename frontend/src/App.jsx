@@ -38,7 +38,7 @@ Yields: 6 cookies`;
     setEditingIndex(null);
 
     try {
-      const response = await fetch('http://localhost:8000/calculate-cost', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/calculate-cost`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

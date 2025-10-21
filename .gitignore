@@ -12,6 +12,8 @@ frontend/.vite/
 # Environment variables
 .env
 *.env
+.env.local
+.env.production
 
 # OS
 .DS_Store
