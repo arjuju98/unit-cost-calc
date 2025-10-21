@@ -8,7 +8,8 @@ export default function UnitCostCalculator() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [editingIndex, setEditingIndex] = useState(null);
-  const [editPrice, setEditPrice] = useState('');
+  const [editPackageSize, setEditPackageSize] = useState('');
+  const [editPackagePrice, setEditPackagePrice] = useState('');
   const [expandedIndex, setExpandedIndex] = useState(null);
 
   const exampleRecipe = `Chocolate Chip Protein Cookies
@@ -61,27 +62,79 @@ Yields: 6 cookies`;
     }
   };
 
-  const startEdit = (index, currentCost) => {
+  const parsePackageSize = (sizeStr) => {
+    // Extract numeric value from package size string like "454g" or "1kg"
+    const match = sizeStr.match(/(\d+(?:\.\d+)?)\s*(g|kg|ml|L|item)/i);
+    if (!match) return null;
+    
+    let value = parseFloat(match[1]);
+    const unit = match[2].toLowerCase();
+    
+    // Convert to base units (grams/ml)
+    if (unit === 'kg') value *= 1000;
+    if (unit === 'l') value *= 1000;
+    
+    return { value, unit: unit === 'item' ? 'item' : (unit === 'ml' || unit === 'l' ? 'ml' : 'g') };
+  };
+
+  const startEdit = (index) => {
+    const ing = result.ingredients[index];
+    if (ing.package_info) {
+      // Extract just the numeric part and unit from package size
+      const parsed = parsePackageSize(ing.package_info.size);
+      if (parsed) {
+        setEditPackageSize(parsed.value.toString());
+      } else {
+        setEditPackageSize('');
+      }
+      setEditPackagePrice(ing.package_info.price.toFixed(2));
+    }
     setEditingIndex(index);
-    setEditPrice(currentCost.toFixed(2));
   };
 
   const cancelEdit = () => {
     setEditingIndex(null);
-    setEditPrice('');
+    setEditPackageSize('');
+    setEditPackagePrice('');
   };
 
   const saveEdit = (index) => {
-    const newCost = parseFloat(editPrice);
-    if (isNaN(newCost) || newCost < 0) {
-      alert('Please enter a valid price');
+    const packageSize = parseFloat(editPackageSize);
+    const packagePrice = parseFloat(editPackagePrice);
+    
+    if (isNaN(packageSize) || packageSize <= 0) {
+      alert('Please enter a valid package size');
+      return;
+    }
+    if (isNaN(packagePrice) || packagePrice < 0) {
+      alert('Please enter a valid package price');
       return;
     }
 
-    // Update the ingredient cost
+    const ing = result.ingredients[index];
+    
+    // Calculate new cost per unit
+    const newCostPerUnit = packagePrice / packageSize;
+    
+    // Calculate new ingredient cost based on quantity used
+    const newIngredientCost = newCostPerUnit * ing.quantity;
+    
+    // Determine display unit
+    const displayUnit = ing.unit === 'ml' ? 'ml' : (ing.unit === 'item' ? 'item' : 'g');
+    
+    // Update the ingredient
     const updatedIngredients = [...result.ingredients];
-    updatedIngredients[index].cost = newCost;
-    updatedIngredients[index].manually_adjusted = true;
+    updatedIngredients[index] = {
+      ...ing,
+      cost: newIngredientCost,
+      manually_adjusted: true,
+      package_info: {
+        size: `${packageSize}${displayUnit}`,
+        price: packagePrice,
+        cost_per_unit: newCostPerUnit,
+        unit: displayUnit
+      }
+    };
 
     // Recalculate totals
     const newTotalCost = updatedIngredients.reduce((sum, ing) => sum + ing.cost, 0);
@@ -95,7 +148,8 @@ Yields: 6 cookies`;
     });
 
     setEditingIndex(null);
-    setEditPrice('');
+    setEditPackageSize('');
+    setEditPackagePrice('');
   };
 
   const toggleExpanded = (index) => {
@@ -223,8 +277,8 @@ Yields: 6 cookies`;
                   <div className="flex items-start gap-2">
                     <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="font-medium">Tip: You can edit prices!</p>
-                      <p className="text-xs mt-1">Click the edit icon to adjust any ingredient cost based on your actual purchase price.</p>
+                      <p className="font-medium">Adjust pricing to match your purchases</p>
+                      <p className="text-xs mt-1">Click "show details" then edit the package size and price you actually paid.</p>
                     </div>
                   </div>
                 </div>
@@ -239,9 +293,6 @@ Yields: 6 cookies`;
                         </th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase">
                           Cost
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase w-20">
-                          Edit
                         </th>
                       </tr>
                     </thead>
@@ -277,62 +328,83 @@ Yields: 6 cookies`;
                               )}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              {editingIndex === idx ? (
-                                <div className="flex items-center justify-end gap-1">
-                                  <span className="text-sm text-gray-500">$</span>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    value={editPrice}
-                                    onChange={(e) => setEditPrice(e.target.value)}
-                                    className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-orange-500 text-right"
-                                    autoFocus
-                                  />
-                                </div>
-                              ) : (
-                                <span className="text-sm text-gray-900 font-medium">
-                                  ${ing.cost.toFixed(2)}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {editingIndex === idx ? (
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    onClick={() => saveEdit(idx)}
-                                    className="p-1 text-green-600 hover:bg-green-50 rounded"
-                                    title="Save"
-                                  >
-                                    <Check className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={cancelEdit}
-                                    className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                    title="Cancel"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => startEdit(idx, ing.cost)}
-                                  className="p-1 text-gray-600 hover:bg-gray-100 rounded"
-                                  title="Edit price"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                              )}
+                              <span className="text-sm text-gray-900 font-medium">
+                                ${ing.cost.toFixed(2)}
+                              </span>
                             </td>
                           </tr>
                           {expandedIndex === idx && ing.package_info && (
                             <tr className="bg-gray-50">
-                              <td colSpan="3" className="px-4 py-3">
-                                <div className="text-xs text-gray-600 space-y-1">
-                                  <div className="font-medium text-gray-700">Pricing Details:</div>
-                                  <div>Package Size: {ing.package_info.size}</div>
-                                  <div>Package Price: ${ing.package_info.price.toFixed(2)}</div>
-                                  <div>Cost per {ing.package_info.unit}: ${ing.package_info.cost_per_unit.toFixed(4)}</div>
-                                </div>
+                              <td colSpan="2" className="px-4 py-3">
+                                {editingIndex === idx ? (
+                                  <div className="space-y-3">
+                                    <div className="text-sm font-medium text-gray-700 mb-2">
+                                      Edit Package Details
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
+                                        <label className="block text-xs text-gray-600 mb-1">
+                                          Package Size ({ing.package_info.unit})
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="0.1"
+                                          value={editPackageSize}
+                                          onChange={(e) => setEditPackageSize(e.target.value)}
+                                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-orange-500"
+                                          placeholder="e.g., 1000"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-gray-600 mb-1">
+                                          Package Price ($)
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={editPackagePrice}
+                                          onChange={(e) => setEditPackagePrice(e.target.value)}
+                                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-orange-500"
+                                          placeholder="e.g., 12.00"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 pt-2">
+                                      <button
+                                        onClick={() => saveEdit(idx)}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                                      >
+                                        <Check className="w-4 h-4" />
+                                        Save
+                                      </button>
+                                      <button
+                                        onClick={cancelEdit}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
+                                      >
+                                        <X className="w-4 h-4" />
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-gray-600 space-y-1">
+                                    <div className="flex justify-between items-center">
+                                      <div>
+                                        <div className="font-medium text-gray-700 mb-1">Pricing Details:</div>
+                                        <div>Package Size: {ing.package_info.size}</div>
+                                        <div>Package Price: ${ing.package_info.price.toFixed(2)}</div>
+                                        <div>Cost per {ing.package_info.unit}: ${ing.package_info.cost_per_unit.toFixed(4)}</div>
+                                      </div>
+                                      <button
+                                        onClick={() => startEdit(idx)}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 text-orange-700 text-sm rounded hover:bg-orange-200"
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                        Edit
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           )}
