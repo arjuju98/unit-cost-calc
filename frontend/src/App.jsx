@@ -38,7 +38,7 @@ Yields: 6 cookies`;
     setEditingIndex(null);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/calculate-cost`, {
+      const response = await fetch('http://localhost:8000/calculate-cost', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,6 +54,7 @@ Yields: 6 cookies`;
       }
 
       const data = await response.json();
+      console.log('Received data:', data); // Debug log
       setResult(data);
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -79,8 +80,13 @@ Yields: 6 cookies`;
 
   const startEdit = (index) => {
     const ing = result.ingredients[index];
-    if (ing.package_info) {
-      // Extract just the numeric part and unit from package size
+    
+    if (ing.unknown_ingredient) {
+      // For unknown ingredients, start with empty fields
+      setEditPackageSize('');
+      setEditPackagePrice('');
+    } else if (ing.package_info) {
+      // For known ingredients, pre-fill with existing data
       const parsed = parsePackageSize(ing.package_info.size);
       if (parsed) {
         setEditPackageSize(parsed.value.toString());
@@ -308,10 +314,15 @@ Yields: 6 cookies`;
                                     Edited
                                   </span>
                                 )}
+                                {ing.unknown_ingredient && !ing.manually_adjusted && (
+                                  <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                                    Unknown
+                                  </span>
+                                )}
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
                                 {ing.quantity}{ing.unit}
-                                {ing.package_info && (
+                                {ing.package_info && !ing.unknown_ingredient && (
                                   <button
                                     onClick={() => toggleExpanded(idx)}
                                     className="ml-2 text-blue-600 hover:text-blue-700 underline"
@@ -326,25 +337,41 @@ Yields: 6 cookies`;
                                   <span>{ing.note}</span>
                                 </div>
                               )}
+                              {ing.unknown_ingredient && !ing.manually_adjusted && (
+                                <div className="text-xs text-amber-700 mt-1.5 bg-amber-50 px-2 py-1.5 rounded">
+                                  <div className="font-medium mb-1">We don't have pricing data for this ingredient yet.</div>
+                                  <button
+                                    onClick={() => startEdit(idx)}
+                                    className="text-blue-600 hover:text-blue-700 underline font-medium"
+                                  >
+                                    Add your package info to calculate cost
+                                  </button>
+                                </div>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <span className="text-sm text-gray-900 font-medium">
-                                ${ing.cost.toFixed(2)}
-                              </span>
+                              {ing.unknown_ingredient && !ing.manually_adjusted ? (
+                                <span className="text-sm text-gray-400 italic">Unknown</span>
+                              ) : (
+                                <span className="text-sm text-gray-900 font-medium">
+                                  ${ing.cost.toFixed(2)}
+                                </span>
+                              )}
                             </td>
                           </tr>
-                          {expandedIndex === idx && ing.package_info && (
+                          {((expandedIndex === idx && ing.package_info && !ing.unknown_ingredient) || 
+                            (editingIndex === idx && ing.unknown_ingredient)) && (
                             <tr className="bg-gray-50">
                               <td colSpan="2" className="px-4 py-3">
                                 {editingIndex === idx ? (
                                   <div className="space-y-3">
                                     <div className="text-sm font-medium text-gray-700 mb-2">
-                                      Edit Package Details
+                                      {ing.unknown_ingredient ? 'Add Package Details' : 'Edit Package Details'}
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                       <div>
                                         <label className="block text-xs text-gray-600 mb-1">
-                                          Package Size ({ing.package_info.unit})
+                                          Package Size ({ing.unit === 'item' ? 'items' : ing.unit})
                                         </label>
                                         <input
                                           type="number"
@@ -369,21 +396,28 @@ Yields: 6 cookies`;
                                         />
                                       </div>
                                     </div>
+                                    {ing.unknown_ingredient && (
+                                      <div className="text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded">
+                                        💡 Thanks for helping us improve! Your input helps other bakers too.
+                                      </div>
+                                    )}
                                     <div className="flex items-center gap-2 pt-2">
                                       <button
                                         onClick={() => saveEdit(idx)}
                                         className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700"
                                       >
                                         <Check className="w-4 h-4" />
-                                        Save
+                                        {ing.unknown_ingredient ? 'Calculate' : 'Save'}
                                       </button>
-                                      <button
-                                        onClick={cancelEdit}
-                                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
-                                      >
-                                        <X className="w-4 h-4" />
-                                        Cancel
-                                      </button>
+                                      {!ing.unknown_ingredient && (
+                                        <button
+                                          onClick={cancelEdit}
+                                          className="flex items-center gap-1 px-3 py-1.5 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
+                                        >
+                                          <X className="w-4 h-4" />
+                                          Cancel
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 ) : (

@@ -15,12 +15,7 @@ app = FastAPI()
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", 
-        "http://localhost:3000",
-        "https://unit-cost-calc.vercel.app",  # Your actual Vercel URL
-        "https://*.vercel.app"  # Allows preview deployments
-    ],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,6 +45,10 @@ class Ingredient(BaseModel):
     note: Optional[str] = None
     package_info: Optional[PackageInfo] = None
     manually_adjusted: bool = False
+    unknown_ingredient: bool = False
+    
+    class Config:
+        from_attributes = True
 
 class CostResult(BaseModel):
     recipe_name: Optional[str]
@@ -166,13 +165,8 @@ def get_ingredient_price(ingredient_name: str, quantity: float, unit: str) -> tu
             )
         return cost, package_info
     
-    # Default for unknown ingredients - no package info
-    if unit == "item":
-        cost = 0.25 * quantity
-    else:
-        cost = 0.01 * quantity
-    
-    return cost, None
+    # Default for unknown ingredients - return minimal cost and flag as unknown
+    return 0, None
 
 @app.get("/")
 async def root():
@@ -211,13 +205,20 @@ async def calculate_cost(request: RecipeRequest):
                 ing["unit"]
             )
             
+            # Check if ingredient is unknown (cost = 0 and no package_info)
+            is_unknown = (cost == 0 and package_info is None)
+            
+            print(f"Ingredient: {ing['ingredient']}, cost: {cost}, package_info: {package_info}, is_unknown: {is_unknown}")
+            
             ingredients_with_cost.append(Ingredient(
                 ingredient=ing["ingredient"],
                 quantity=ing["quantity"],
                 unit=ing["unit"],
                 cost=cost,
                 note=ing.get("note"),
-                package_info=package_info
+                package_info=package_info,
+                manually_adjusted=False,
+                unknown_ingredient=is_unknown
             ))
             
             total_cost += cost
