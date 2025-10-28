@@ -15,12 +15,7 @@ app = FastAPI()
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://unit-cost-calc.vercel.app",
-        "https://*.vercel.app"
-    ],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -70,13 +65,22 @@ Return ONLY valid JSON (no markdown, no code blocks) with this structure:
 {{
     "recipe_name": "name of recipe if mentioned",
     "ingredients": [
-        {{"ingredient": "ingredient name", "quantity": number, "unit": "g|ml|item|tbsp|tsp|cup", "note": "optional clarification"}},
+        {{"ingredient": "ingredient name", "quantity": number, "unit": "g|ml|item", "note": "optional clarification"}},
         ...
     ]
 }}
 
-Important rules:
-- Convert all volume measurements to grams where possible (1 cup flour = 120g, 1 cup sugar = 200g, 1 cup butter = 227g, 1 tbsp = 15ml, 1 tsp = 5ml)
+CRITICAL CONVERSION RULES - You MUST convert all measurements:
+- ALL solid ingredients MUST be in grams (g), never oz, cups, tbsp, tsp
+- ALL liquid ingredients MUST be in milliliters (ml), never oz, cups, tbsp, tsp
+- Items like eggs, use "item" as unit
+
+Standard conversions:
+- 1 cup flour = 120g, 1 cup sugar = 200g, 1 cup butter = 227g, 1 cup oats = 80g
+- 1 oz (weight) = 28.35g
+- 1 tbsp = 15ml, 1 tsp = 5ml
+- 1 cup (liquid) = 240ml
+- 1 fl oz = 30ml
 - For protein powder scoops/servings: use 30g per scoop as default and add note: "estimated at 30g per scoop"
 - For other supplement scoops: use reasonable estimates based on product type and add a note
 - For items like eggs, use "item" as unit
@@ -84,6 +88,12 @@ Important rules:
 - Extract quantities as numbers only
 - If no recipe name is found, set to null
 - Add a "note" field when you've made an assumption about conversions
+
+EXAMPLES:
+- "2 cups flour" → {{"ingredient": "flour", "quantity": 240, "unit": "g"}}
+- "8 oz butter" → {{"ingredient": "butter", "quantity": 227, "unit": "g"}}
+- "1/4 cup oil" → {{"ingredient": "oil", "quantity": 60, "unit": "ml"}}
+- "2 tbsp honey" → {{"ingredient": "honey", "quantity": 30, "unit": "ml"}}
 
 Recipe:
 {recipe_text}"""
