@@ -38,16 +38,21 @@ Yields: 6 cookies`;
     setEditingIndex(null);
 
     try {
-      const response = await fetch('https://unit-cost-calc.onrender.com/calculate-cost', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          recipe: recipe,
-          yield_count: parseInt(yield_)
-        }),
-      });
+  // Use localhost when running locally, Render when in production
+  const apiUrl = window.location.hostname === 'localhost' 
+    ? 'http://localhost:8000' 
+    : 'https://unit-cost-calc.onrender.com';
+  
+  const response = await fetch(`${apiUrl}/calculate-cost`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      recipe: recipe,
+      yield_count: parseInt(yield_)
+    }),
+  });
 
       if (!response.ok) {
         throw new Error('Failed to calculate cost');
